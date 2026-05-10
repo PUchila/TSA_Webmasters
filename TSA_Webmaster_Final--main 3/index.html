@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Texas Directory Hub | Community Resource Hub</title>
+  <link rel="icon" href="assets/logo.svg"/>
+  <meta name="description" content="A centralized hub helping people discover and share community resources such as education, health services, shelters, food banks, and support organizations across Texas."/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            hub: {
+              teal: '#0d9488',
+              'teal-light': '#14b8a6',
+              'teal-dark': '#0f766e',
+              blue: '#1d4ed8',
+              'blue-light': '#60a5fa',
+              green: '#16a34a',
+              'green-light': '#4ade80',
+              gray: '#4b5563',
+            }
+          },
+          boxShadow: {
+            soft: '0 10px 30px rgba(0,0,0,0.06)',
+            card: '0 4px 20px rgba(15,118,110,0.08)',
+            'card-strong': '0 18px 45px rgba(15,118,110,0.18)',
+          },
+          animation: {
+            'fade-in': 'fadeIn 0.5s ease-out',
+            'slide-up': 'slideUp 0.45s ease-out',
+          },
+          keyframes: {
+            fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+            slideUp: { '0%': { opacity: '0', transform: 'translateY(16px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <style>
+    html { scroll-behavior: smooth; }
+    html, body { height: 100%; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .animate-fade-in, .animate-slide-up { animation: none; }
+    }
+    .glass { backdrop-filter: blur(8px); }
+    .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .nav-link {
+      cursor: pointer;
+      transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+      border-bottom: 2px solid transparent;
+    }
+    .nav-link:hover { color: #0f766e; background-color: rgba(45,212,191,0.08); }
+    .nav-link.active { color: #0f766e; border-bottom-color: #0f766e; }
+    .content-height { height: 500px; }
+    #results { height: 430px; overflow-y: auto; }
+    .card-hover {
+      transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.2s ease;
+    }
+    .card-hover:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 14px 40px rgba(15,118,110,0.18);
+      border-color: #14b8a6;
+    }
+    .btn-primary {
+      transition: background-color 0.2s, transform 0.08s, box-shadow 0.2s;
+    }
+    .btn-primary:hover { background-color: #0f766e; box-shadow: 0 12px 35px rgba(15,118,110,0.35); }
+    .btn-primary:active { transform: scale(0.97); }
+    .icon-wrap {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-sky-50 via-white to-emerald-50 text-gray-900 font-sans antialiased">
+
+<!-- Skip link -->
+<a href="#main-content" class="sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-hub-teal focus:text-white focus:rounded-lg focus:overflow-visible focus:w-auto focus:h-auto focus:m-0 focus:[clip:auto]">Skip to main content</a>
+
+<header class="sticky top-0 z-30 bg-white/90 glass border-b border-teal-100 shadow-sm">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
+    <div class="flex items-center gap-3">
+      <img src="assets/logo.svg" alt="Texas Directory Hub logo" class="w-10 h-10 rounded-xl shadow-soft"/>
+      <div>
+        <h1 class="text-xl md:text-2xl font-bold tracking-tight text-gray-900">Texas Directory Hub</h1>
+        <p class="text-xs md:text-sm text-hub-teal-dark font-medium">Community Resource Hub for Texans</p>
+      </div>
+    </div>
+
+    <!-- Desktop navigation -->
+    <nav class="hidden md:flex items-center gap-1" aria-label="Main navigation">
+      <button type="button" onclick="showPage('home')" id="nav-home" class="nav-link text-sm font-semibold active py-2 px-3 rounded-lg text-hub-teal-dark border-b-2 border-hub-teal">Home</button>
+      <button type="button" onclick="showPage('resources')" id="nav-resources" class="nav-link text-sm font-semibold text-gray-600 py-2 px-3 rounded-lg">Directory</button>
+      <button type="button" onclick="showPage('submit')" id="nav-submit" class="nav-link text-sm font-semibold text-gray-600 py-2 px-3 rounded-lg">Submit Resource</button>
+      <button type="button" onclick="showPage('about')" id="nav-about" class="nav-link text-sm font-semibold text-gray-600 py-2 px-3 rounded-lg">About</button>
+      <button type="button" onclick="showPage('refs')" id="nav-refs" class="nav-link text-sm font-semibold text-gray-600 py-2 px-3 rounded-lg">References</button>
+    </nav>
+
+    <!-- Mobile menu button -->
+    <button type="button" id="menu-toggle" class="md:hidden p-2 rounded-lg text-gray-700 hover:bg-teal-100" aria-expanded="false" aria-controls="nav-menu" aria-label="Open navigation menu">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <div class="hidden text-xs text-gray-500 md:block">Updated 2025-10-20</div>
+  </div>
+
+  <!-- Mobile navigation -->
+  <div id="nav-menu" class="hidden md:hidden flex-col gap-1 px-4 pb-3 border-t border-teal-100" aria-label="Mobile navigation">
+    <button type="button" onclick="showPage('home'); closeMenu();" class="nav-link text-left py-3 px-3 rounded-lg font-medium">Home</button>
+    <button type="button" onclick="showPage('resources'); closeMenu();" class="nav-link text-left py-3 px-3 rounded-lg font-medium">Directory</button>
+    <button type="button" onclick="showPage('submit'); closeMenu();" class="nav-link text-left py-3 px-3 rounded-lg font-medium">Submit Resource</button>
+    <button type="button" onclick="showPage('about'); closeMenu();" class="nav-link text-left py-3 px-3 rounded-lg font-medium">About</button>
+    <button type="button" onclick="showPage('refs'); closeMenu();" class="nav-link text-left py-3 px-3 rounded-lg font-medium">References</button>
+  </div>
+</header>
+
+<main id="main-content">
+  <!-- HOME: Hero, Mission, How It Works, Categories -->
+  <div id="page-home" class="max-w-7xl mx-auto px-4 py-8 md:py-12 space-y-10">
+    <!-- Hero with mission and CTAs -->
+    <section class="rounded-3xl p-6 md:p-10 bg-gradient-to-br from-hub-blue to-hub-teal-dark text-white shadow-card-strong grid md:grid-cols-2 gap-8 items-center animate-fade-in">
+      <div>
+        <p class="text-xs uppercase tracking-[0.2em] mb-3 text-hub-blue-light/90 font-semibold">Community Resource Directory Hub</p>
+        <h2 class="text-3xl md:text-4xl font-extrabold mb-4 leading-tight">A centralized hub for community support across Texas.</h2>
+        <p class="text-base md:text-lg text-sky-100 mb-4 leading-relaxed">
+          A centralized hub helping people discover and share community resources such as education, health services, shelters, food banks, mental health support, and local community programs.
+        </p>
+        <p class="text-sm md:text-base text-sky-100/90 mb-6">
+          Search the statewide directory, explore an interactive map, and submit new resources so more Texans can find the help they need.
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <button type="button" onclick="showPage('resources')" class="btn-primary inline-flex items-center gap-2 px-5 py-2.5 bg-hub-teal text-white rounded-xl font-semibold shadow-md">
+            Find resources
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <button type="button" onclick="showPage('submit')" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold border border-sky-100/70 bg-white/5 hover:bg-white/10 transition">
+            Submit a resource
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="relative">
+        <div class="absolute inset-6 bg-gradient-to-tr from-white/10 via-sky-200/10 to-emerald-200/20 rounded-3xl blur-xl opacity-70"></div>
+        <div class="relative rounded-3xl bg-white/10 border border-sky-100/40 shadow-soft p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="text-xs uppercase tracking-[0.2em] text-sky-100/80">At a glance</span>
+            <span class="px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-50 text-[11px] font-semibold">For all Texans</span>
+          </div>
+          <dl class="grid grid-cols-3 gap-3 text-center text-xs">
+            <div class="rounded-2xl bg-white/10 px-3 py-3">
+              <dt class="text-sky-100/80 mb-1">Categories</dt>
+              <dd class="text-lg font-bold">8+</dd>
+            </div>
+            <div class="rounded-2xl bg-white/10 px-3 py-3">
+              <dt class="text-sky-100/80 mb-1">Major cities</dt>
+              <dd class="text-lg font-bold">6</dd>
+            </div>
+            <div class="rounded-2xl bg-white/10 px-3 py-3">
+              <dt class="text-sky-100/80 mb-1">Statewide tools</dt>
+              <dd class="text-lg font-bold">2</dd>
+            </div>
+          </dl>
+          <p class="text-xs text-sky-100/80">
+            Every resource in this hub is tagged by category and location so community members can quickly find what is most relevant to them.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="rounded-3xl p-6 md:p-8 bg-white/90 glass border border-teal-100 shadow-soft animate-slide-up">
+      <h3 class="text-xl font-bold text-gray-900 mb-2">How the hub works</h3>
+      <p class="text-sm text-gray-600 mb-6 max-w-3xl">
+        The Texas Directory Hub is designed as a real community tool. It brings together trusted, up-to-date resources and makes them easy to explore.
+      </p>
+      <div class="grid gap-4 md:grid-cols-3">
+        <article class="card-hover rounded-2xl border border-teal-100 bg-gradient-to-br from-sky-50 to-white p-5">
+          <div class="icon-wrap bg-sky-100 text-hub-blue mb-3" aria-hidden="true">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 6a5 5 0 100 10 5 5 0 000-10z"/></svg>
+          </div>
+          <h4 class="font-semibold text-gray-900 mb-1 text-sm">1. Discover resources</h4>
+          <p class="text-xs text-gray-600">
+            Use the directory to search by keyword, filter by category, and explore the interactive map to see what is available near you.
+          </p>
+        </article>
+        <article class="card-hover rounded-2xl border border-teal-100 bg-gradient-to-br from-emerald-50 to-white p-5">
+          <div class="icon-wrap bg-emerald-100 text-hub-green mb-3" aria-hidden="true">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <h4 class="font-semibold text-gray-900 mb-1 text-sm">2. Access support</h4>
+          <p class="text-xs text-gray-600">
+            Each resource card includes a short description, location, and direct link so people can quickly contact the organizations they need.
+          </p>
+        </article>
+        <article class="card-hover rounded-2xl border border-teal-100 bg-gradient-to-br from-orange-50 to-white p-5">
+          <div class="icon-wrap bg-orange-100 text-orange-600 mb-3" aria-hidden="true">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          </div>
+          <h4 class="font-semibold text-gray-900 mb-1 text-sm">3. Strengthen the hub</h4>
+          <p class="text-xs text-gray-600">
+            Community members and organizations can submit new resources, keeping the directory current and expanding the impact across Texas.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <!-- Categories overview -->
+    <section class="space-y-4">
+      <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-2">
+        <div>
+          <h3 class="text-xl font-bold text-gray-900">Explore resource categories</h3>
+          <p class="text-sm text-gray-600 max-w-2xl">
+            Browse by topic to quickly find support that matches real needs in the community, from basic necessities to long-term stability.
+          </p>
+        </div>
+        <button type="button" onclick="showPage('resources')" class="hidden md:inline-flex items-center gap-2 text-xs font-semibold text-hub-teal-dark hover:text-hub-teal">
+          View full directory
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+        <!-- Food Assistance -->
+        <button type="button" onclick="showPage('resources'); setCategoryFilter('Food');" class="card-hover text-left rounded-2xl p-4 bg-white border border-teal-100 shadow-card">
+          <div class="icon-wrap bg-orange-100 text-orange-600 mb-2" aria-hidden="true">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+          </div>
+          <h4 class="font-semibold text-sm text-gray-900 mb-1">Food Assistance</h4>
+          <p class="text-xs text-gray-600">Food banks and meal programs for families and individuals.</p>
+        </button>
+        <!-- Healthcare -->
+        <button type="button" onclick="showPage('resources'); setCategoryFilter('Health');" class="card-hover text-left rounded-2xl p-4 bg-white border border-teal-100 shadow-card">
+          <div class="icon-wrap bg-red-100 text-red-600 mb-2" aria-hidden="true">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+          </div>
+          <h4 class="font-semibold text-sm text-gray-900 mb-1">Healthcare</h4>
+          <p class="text-xs text-gray-600">Hospitals, clinics, and statewide health programs.</p>
+        </button>
+        <!-- Education -->
+        <button type="button" onclick="showPage('resources'); setCategoryFilter('Education');" class="card-hover text-left rounded-2xl p-4 bg-white border border-teal-100 shadow-card">
+          <div class="icon-wrap bg-indigo-100 text-indigo-600 mb-2" aria-hidden="true">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/></svg>
+          </div>
+          <h4 class="font-semibold text-sm text-gray-900 mb-1">Education</h4>
+          <p class="text-xs text-gray-600">Schools, colleges, and state education support.</p>
+        </button>
+        <!-- Housing -->
+        <button type="button" onclick="showPage('resources'); setCategoryFilter('Housing');" class="card-hover text-left rounded-2xl p-4 bg-white border border-teal-100 shadow-card">
+          <div class="icon-wrap bg-blue-100 text-hub-blue mb-2" aria-hidden="true">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+          </div>
+          <h4 class="font-semibold text-sm text-gray-900 mb-1">Housing</h4>
+          <p class="text-xs text-gray-600">Affordable housing support and rental assistance.</p>
+        </button>
+        <!-- Mental Health -->
+        <button type="button" onclick="showPage('resources'); setCategoryFilter('Mental Health');" class="card-hover text-left rounded-2xl p-4 bg-white border border-teal-100 shadow-card">
+          <div class="icon-wrap bg-purple-100 text-purple-600 mb-2" aria-hidden="true">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7a4 4 0 00-8 0v2a4 4 0 00-1 7.874V19a1 1 0 001 1h6m3-13a4 4 0 014 4v2a4 4 0 011 7.874V21a1 1 0 01-1 1h-6"/></svg>
+          </div>
+          <h4 class="font-semibold text-sm text-gray-900 mb-1">Mental Health</h4>
+          <p class="text-xs text-gray-600">Statewide hotlines and emotional support resources.</p>
+        </button>
+        <!-- Community Programs -->
+        <button type="button" onclick="showPage('resources'); setCategoryFilter('Community Programs');" class="card-hover text-left rounded-2xl p-4 bg-white border border-teal-100 shadow-card">
+          <div class="icon-wrap bg-emerald-100 text-hub-green mb-2" aria-hidden="true">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          </div>
+          <h4 class="font-semibold text-sm text-gray-900 mb-1">Community Programs</h4>
+          <p class="text-xs text-gray-600">Volunteer, youth, and neighborhood-strengthening initiatives.</p>
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <!-- RESOURCES / DIRECTORY -->
+  <div id="page-resources" class="max-w-7xl mx-auto px-4 py-8 hidden space-y-6">
+    <!-- Featured resources -->
+    <section class="rounded-3xl p-5 md:p-6 bg-white/90 glass border border-emerald-100 shadow-soft">
+      <div class="flex items-center justify-between gap-2 mb-3">
+        <div class="flex items-center gap-2">
+          <div class="icon-wrap bg-emerald-50 text-hub-green" aria-hidden="true">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          </div>
+          <div>
+            <h2 class="text-sm md:text-base font-semibold text-gray-900">Featured community resources</h2>
+            <p class="text-xs text-gray-600">High-impact organizations and statewide tools highlighted for quick access.</p>
+          </div>
+        </div>
+      </div>
+      <div id="featured-resources" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs"></div>
+    </section>
+
+    <!-- Filters + search -->
+    <section class="rounded-3xl p-4 md:p-6 bg-white/90 glass shadow-soft border border-teal-100">
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <label class="block">
+          <span class="text-xs font-semibold text-gray-700">Search</span>
+          <input id="search" type="text" placeholder="Search by name, service, or keyword..." class="mt-1 w-full rounded-xl border-teal-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-400/30 transition" aria-label="Search resources"/>
+        </label>
+        <label class="block">
+          <span class="text-xs font-semibold text-gray-700">Category</span>
+          <select id="filter-category" class="mt-1 w-full rounded-xl border-teal-200 focus:border-teal-500 transition" aria-label="Filter by category"></select>
+        </label>
+        <label class="block">
+          <span class="text-xs font-semibold text-gray-700">City</span>
+          <select id="filter-city" class="mt-1 w-full rounded-xl border-teal-200 focus:border-teal-500 transition" aria-label="Filter by city"></select>
+        </label>
+        <label class="block">
+          <span class="text-xs font-semibold text-gray-700">ZIP code</span>
+          <select id="filter-zip" class="mt-1 w-full rounded-xl border-teal-200 focus:border-teal-500 transition" aria-label="Filter by ZIP code"></select>
+        </label>
+        <div class="flex items-end">
+          <button type="button" id="reset" class="w-full h-[42px] mt-1 rounded-xl bg-hub-teal text-white hover:bg-hub-teal-dark transition shadow-md font-medium btn-primary">Reset filters</button>
+        </div>
+      </div>
+      <p class="mt-3 text-sm text-gray-600">Showing <span id="count" class="font-bold text-hub-teal">0</span> resources</p>
+    </section>
+
+    <!-- Map + card list -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="rounded-3xl overflow-hidden bg-white/90 glass border border-teal-100 shadow-soft content-height">
+        <div id="map" class="h-full w-full min-h-[380px]" aria-label="Map of Texas resource locations"></div>
+      </div>
+      <div class="rounded-3xl p-4 md:p-6 bg-white/90 glass border border-teal-100 shadow-soft content-height text-sm flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg font-semibold text-teal-900">Resource directory</h2>
+        </div>
+        <div id="results" class="space-y-3 pr-2 flex-1 overflow-y-auto" role="list"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- SUBMIT RESOURCE -->
+  <div id="page-submit" class="max-w-3xl mx-auto px-4 py-10 hidden">
+    <section class="rounded-3xl p-8 bg-white/95 glass shadow-soft border border-teal-100">
+      <h2 class="text-2xl font-bold mb-2 text-teal-900">Submit a community resource</h2>
+      <p class="text-gray-600 mb-6 text-sm">
+        Help keep this hub accurate and inclusive by sharing organizations you know. We review each submission before adding it to the public directory.
+      </p>
+
+      <form id="submit-form" class="space-y-4" onsubmit="return handleSubmission(event);">
+        <div>
+          <label for="sub-name" class="block text-xs font-bold text-gray-700 uppercase mb-1">Organization name <span class="text-red-500">*</span></label>
+          <input id="sub-name" type="text" class="w-full rounded-xl border border-teal-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-400/30 p-3 bg-white transition" required aria-required="true" placeholder="e.g. Central Texas Food Bank"/>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label for="sub-city" class="block text-xs font-bold text-gray-700 uppercase mb-1">City</label>
+            <input id="sub-city" type="text" class="w-full rounded-xl border border-teal-200 focus:border-teal-500 p-3 bg-white transition" placeholder="e.g. Austin"/>
+          </div>
+          <div>
+            <label for="sub-cat" class="block text-xs font-bold text-gray-700 uppercase mb-1">Category</label>
+            <select id="sub-cat" class="w-full rounded-xl border border-teal-200 focus:border-teal-500 p-3 bg-white transition" aria-label="Resource category">
+              <option value="Health">Health</option>
+              <option value="Mental Health">Mental Health</option>
+              <option value="Education">Education</option>
+              <option value="Food">Food</option>
+              <option value="Housing">Housing</option>
+              <option value="Community Programs">Community Programs</option>
+              <option value="Volunteering">Volunteering</option>
+              <option value="Jobs">Jobs</option>
+              <option value="Emergency">Emergency</option>
+              <option value="Transportation">Transportation</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label for="sub-desc" class="block text-xs font-bold text-gray-700 uppercase mb-1">Short description</label>
+          <textarea id="sub-desc" rows="3" class="w-full rounded-xl border border-teal-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-400/30 p-3 bg-white transition text-sm" placeholder="Describe who this resource serves and what support it provides."></textarea>
+        </div>
+        <div>
+          <label for="sub-url" class="block text-xs font-bold text-gray-700 uppercase mb-1">Website or contact <span class="text-red-500">*</span></label>
+          <input id="sub-url" type="url" placeholder="https://... or contact email" class="w-full rounded-xl border border-teal-200 focus:border-teal-500 focus:ring-2 focus:ring-teal-400/30 p-3 bg-white transition" required aria-required="true"/>
+        </div>
+        <div>
+          <label for="sub-logo" class="block text-xs font-bold text-gray-700 uppercase mb-1">Logo (optional)</label>
+          <input id="sub-logo" type="text" placeholder="Link to logo image (optional)" class="w-full rounded-xl border border-teal-200 focus:border-teal-500 p-3 bg-white transition text-sm"/>
+          <p class="text-[11px] text-gray-500 mt-1">Uploading files is not required. You may paste a link to the organization’s logo if available.</p>
+        </div>
+        <button type="submit" class="w-full py-3.5 bg-hub-teal text-white rounded-xl font-bold hover:bg-hub-teal-dark transition shadow-lg btn-primary">Generate submission email</button>
+        <p id="submit-confirmation" class="hidden mt-3 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">
+          Your email client should now be open with a drafted message. Review it and send to complete your submission.
+        </p>
+      </form>
+    </section>
+  </div>
+
+  <!-- ABOUT -->
+  <div id="page-about" class="max-w-3xl mx-auto px-4 py-10 hidden">
+    <section class="rounded-3xl p-8 bg-white/95 glass shadow-soft border border-teal-100">
+      <h2 class="text-2xl font-bold mb-4 text-teal-900">About the Texas Directory Hub</h2>
+      <p class="text-gray-700 leading-relaxed mb-4 text-sm">
+        The Texas Directory Hub was created as a <strong>Community Resource Directory Hub</strong> for a national student technology competition. While it is a student-built project, it is designed and structured as if it were a real public service platform that communities could rely on.
+      </p>
+      <p class="text-gray-700 leading-relaxed mb-4 text-sm">
+        Our mission is to bring together verified information about food assistance, healthcare, housing, mental health, education, and community programs into one place. By combining search tools, category filters, and a statewide map, we make it easier for people to discover resources they might otherwise miss.
+      </p>
+      <h3 class="text-lg font-semibold text-gray-900 mt-4 mb-2">How communities benefit</h3>
+      <ul class="list-disc list-inside text-sm text-gray-700 space-y-2">
+        <li><strong>Individuals and families</strong> can quickly find local support when they face a challenge.</li>
+        <li><strong>Schools and counselors</strong> can use the hub to share trusted options with students and families.</li>
+        <li><strong>Nonprofits and agencies</strong> can reach more people by having their resources shown alongside partners across Texas.</li>
+      </ul>
+    </section>
+  </div>
+
+  <!-- REFERENCES (required content preserved) -->
+  <div id="page-refs" class="max-w-7xl mx-auto px-4 py-8 hidden">
+    <section class="rounded-3xl p-8 bg-white/95 glass shadow-soft border border-teal-100">
+      <h2 class="text-2xl font-bold mb-6 text-teal-900">Project References</h2>
+      <p class="text-gray-700 mb-8 text-sm">These are the resources we used to build and document this project.</p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+        <div>
+          <h3 class="font-bold text-gray-900 mb-4 uppercase text-xs tracking-widest border-l-4 border-hub-teal pl-3">Project documents</h3>
+          <ul class="space-y-6 text-sm">
+            <li>
+              <a href="Copyrightchecklist.pdf" target="_blank" rel="noopener noreferrer" class="text-hub-teal hover:text-hub-teal-dark font-semibold underline decoration-teal-200 underline-offset-4 text-base">Copyright Checklist</a>
+              <p class="text-gray-500 text-xs mt-1 leading-relaxed">Verification of asset usage and copyright compliance for all images, icons, and external libraries.</p>
+            </li>
+            <li>
+              <a href="WorkLog.pdf" target="_blank" rel="noopener noreferrer" class="text-hub-teal hover:text-hub-teal-dark font-semibold underline decoration-teal-200 underline-offset-4 text-base">Work Log</a>
+              <p class="text-gray-500 text-xs mt-1 leading-relaxed">Detailed record of design decisions, coding milestones, and testing activities throughout development.</p>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="font-bold text-gray-900 mb-4 uppercase text-xs tracking-widest border-l-4 border-hub-teal pl-3">Development tools</h3>
+          <ul class="space-y-4 text-sm">
+            <li><a href="https://www.w3schools.com/html/" target="_blank" rel="noopener noreferrer" class="text-hub-teal font-semibold underline underline-offset-4 hover:text-hub-teal-dark">W3Schools HTML Guide</a></li>
+            <li><a href="https://tailwindcss.com/" target="_blank" rel="noopener noreferrer" class="text-hub-teal font-semibold underline underline-offset-4 hover:text-hub-teal-dark">Tailwind CSS Documentation</a></li>
+            <li><a href="https://leafletjs.com/" target="_blank" rel="noopener noreferrer" class="text-hub-teal font-semibold underline underline-offset-4 hover:text-hub-teal-dark">Leaflet Mapping Engine</a></li>
+            <li><a href="https://pages.github.com/" target="_blank" rel="noopener noreferrer" class="text-hub-teal font-semibold underline underline-offset-4 hover:text-hub-teal-dark">GitHub Pages Hosting</a></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="max-w-7xl mx-auto px-4 py-8 mt-6 border-t border-gray-200 text-xs text-gray-500">
+  <div class="flex flex-col md:flex-row items-center justify-between gap-3">
+    <div>© 2025 Texas Directory Hub — Community Resource Directory Hub</div>
+    <div>Built with Leaflet, Tailwind CSS, and modern accessible HTML</div>
+  </div>
+</footer>
+
+<script>
+// Data with extra categories and featured flag
+const DATA = [
+  { name: "Texas Health & Human Services", category: "Health", city: "Austin", zip: "78701", lat: 30.2715, lng: -97.7426, url: "https://www.hhs.texas.gov/", desc: "State services for health, mental health, and benefits.", featured: true },
+  { name: "Dell Seton Medical Center", category: "Health", city: "Austin", zip: "78712", lat: 30.274, lng: -97.7336, url: "https://www.seton.net/locations/dell-seton-medical-center-austin/", desc: "Teaching hospital in Austin providing emergency and specialty care." },
+  { name: "MD Anderson Cancer Center", category: "Health", city: "Houston", zip: "77030", lat: 29.7046, lng: -95.3947, url: "https://www.mdanderson.org/", desc: "World-renowned cancer care, research, and support services.", featured: true },
+  { name: "UT Southwestern Medical Center", category: "Health", city: "Dallas", zip: "75390", lat: 32.8175, lng: -96.8413, url: "https://www.utswmed.org/", desc: "Academic medical center serving North Texas." },
+  { name: "University Health System", category: "Health", city: "San Antonio", zip: "78229", lat: 29.5083, lng: -98.5776, url: "https://www.universityhealth.com/", desc: "Public hospital system for San Antonio and Bexar County." },
+  { name: "El Paso Children's Hospital", category: "Health", city: "El Paso", zip: "79905", lat: 31.7718, lng: -106.44, url: "https://elpaschildrens.org/", desc: "Specialized pediatric care in El Paso." },
+  { name: "Texas Education Agency", category: "Education", city: "Austin", zip: "78701", lat: 30.271, lng: -97.7437, url: "https://tea.texas.gov/", desc: "State education agency for Texas public schools.", featured: true },
+  { name: "University of Texas at Austin", category: "Education", city: "Austin", zip: "78712", lat: 30.2849, lng: -97.7341, url: "https://www.utexas.edu/", desc: "Flagship public research university." },
+  { name: "Texas A&M University", category: "Education", city: "College Station", zip: "77843", lat: 30.615, lng: -96.3423, url: "https://www.tamu.edu/", desc: "Land-grant research university in College Station." },
+  { name: "University of Houston", category: "Education", city: "Houston", zip: "77204", lat: 29.7199, lng: -95.3422, url: "https://www.uh.edu/", desc: "Public research university in Houston." },
+  { name: "Dallas College", category: "Education", city: "Dallas", zip: "75215", lat: 32.7767, lng: -96.797, url: "https://www.dallascollege.edu/", desc: "Community college network serving Dallas County." },
+  { name: "Central Texas Food Bank", category: "Food", city: "Austin", zip: "78744", lat: 30.2049, lng: -97.7404, url: "https://www.centraltexasfoodbank.org/", desc: "Food assistance and nutrition education for Central Texas.", featured: true },
+  { name: "Houston Food Bank", category: "Food", city: "Houston", zip: "77032", lat: 29.9251, lng: -95.3203, url: "https://www.houstonfoodbank.org/", desc: "Large-scale food distribution serving the Houston region." },
+  { name: "North Texas Food Bank", category: "Food", city: "Plano", zip: "75075", lat: 33.028, lng: -96.712, url: "https://ntfb.org/", desc: "Food assistance for North Texas communities." },
+  { name: "San Antonio Food Bank", category: "Food", city: "San Antonio", zip: "78227", lat: 29.3994, lng: -98.6548, url: "https://safoodbank.org/", desc: "Feeding programs and community kitchens." },
+  { name: "Texas Dept. of Housing & Community Affairs", category: "Housing", city: "Austin", zip: "78701", lat: 30.268, lng: -97.7413, url: "https://www.tdhca.texas.gov/", desc: "Affordable housing, energy assistance, and community programs." },
+  { name: "HACA (Austin Housing Authority)", category: "Housing", city: "Austin", zip: "78702", lat: 30.2598, lng: -97.7336, url: "https://www.hacanet.org/", desc: "Public housing and voucher programs in Austin." },
+  { name: "Houston Housing Authority", category: "Housing", city: "Houston", zip: "77004", lat: 29.7233, lng: -95.359, url: "https://www.housingforhouston.com/", desc: "Affordable housing and vouchers in Houston." },
+  { name: "DHA (Dallas Housing Authority)", category: "Housing", city: "Dallas", zip: "75201", lat: 32.7825, lng: -96.7989, url: "https://www.dhada.org/", desc: "Public housing and rental assistance in Dallas." },
+  { name: "WorkInTexas", category: "Jobs", city: "Austin", zip: "78701", lat: 30.269, lng: -97.74, url: "https://www.workintexas.com/", desc: "Statewide job search and matching platform.", featured: true },
+  { name: "Texas Workforce Commission", category: "Jobs", city: "Austin", zip: "78778", lat: 30.2669, lng: -97.7428, url: "https://www.twc.texas.gov/", desc: "Employment services, training, and unemployment benefits." },
+  { name: "Capital IDEA", category: "Jobs", city: "Austin", zip: "78702", lat: 30.2622, lng: -97.7238, url: "https://www.capitalidea.org/", desc: "Career training and job placement for low-income adults." },
+  { name: "Workforce Solutions Greater Dallas", category: "Jobs", city: "Dallas", zip: "75247", lat: 32.8125, lng: -96.8746, url: "https://www.wfsdallas.com/", desc: "Workforce programs for the Dallas region." },
+  { name: "2-1-1 Texas", category: "Emergency", city: "Statewide", zip: "00000", lat: 31.0, lng: -100.0, url: "https://www.211texas.org/", desc: "Statewide resource directory for help and emergency services.", featured: true },
+  { name: "Texas Division of Emergency Management", category: "Emergency", city: "Austin", zip: "78744", lat: 30.2154, lng: -97.7071, url: "https://tdem.texas.gov/", desc: "Preparedness, response, and recovery for disasters in Texas." },
+  { name: "Ready Harris (Harris County OEM)", category: "Emergency", city: "Houston", zip: "77002", lat: 29.7604, lng: -95.3698, url: "https://www.readyharris.org/", desc: "Emergency information and alerts for Harris County." },
+  { name: "CapMetro (Austin)", category: "Transportation", city: "Austin", zip: "78701", lat: 30.2672, lng: -97.7431, url: "https://www.capmetro.org/", desc: "Austin public transit routes and schedules." },
+  { name: "DART (Dallas)", category: "Transportation", city: "Dallas", zip: "75202", lat: 32.7782, lng: -96.8067, url: "https://www.dart.org/", desc: "Dallas transit rail and bus services." },
+  { name: "VIA Metropolitan Transit", category: "Transportation", city: "San Antonio", zip: "78212", lat: 29.448, lng: -98.5029, url: "https://www.viainfo.net/", desc: "San Antonio area transit system." },
+  { name: "Sun Metro (El Paso)", category: "Transportation", city: "El Paso", zip: "79901", lat: 31.7587, lng: -106.487, url: "https://www.sunmetro.net/", desc: "Public transit for El Paso." },
+  { name: "Texas Mental Health Crisis Line (988)", category: "Mental Health", city: "Statewide", zip: "00000", lat: 31.2, lng: -99.0, url: "https://www.hhs.texas.gov/services/mental-health-substance-use", desc: "Statewide access to mental health crisis support and referrals." },
+  { name: "VolunteerMatch", category: "Community Programs", city: "Statewide", zip: "00000", lat: 31.0, lng: -99.5, url: "https://www.volunteermatch.org/", desc: "Find volunteer opportunities with nonprofits across Texas and beyond.", featured: true },
+  { name: "Texas CASA", category: "Community Programs", city: "Austin", zip: "78701", lat: 30.271, lng: -97.74, url: "https://texascasa.org/", desc: "Court-appointed special advocates for children in foster care; volunteers and partners welcome." }
+];
+
+let MAP, CLUSTER;
+
+function init() {
+  initFilters();
+  initMap();
+  render();
+  renderFeatured();
+}
+
+function initFilters() {
+  const cats = [...new Set(DATA.map(d => d.category))].sort();
+  const cities = [...new Set(DATA.map(d => d.city))].sort();
+  const zips = [...new Set(DATA.map(d => d.zip))].sort((a, b) => String(a).localeCompare(String(b), 'en', { numeric: true }));
+
+  document.getElementById('filter-category').innerHTML = '<option value="">All categories</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join('');
+  document.getElementById('filter-city').innerHTML = '<option value="">All cities</option>' + cities.map(c => `<option value="${c}">${c}</option>`).join('');
+  document.getElementById('filter-zip').innerHTML = '<option value="">All ZIP codes</option>' + zips.map(z => `<option value="${z}">${z}</option>`).join('');
+
+  ['input', 'change'].forEach(evt => {
+    ['search', 'filter-category', 'filter-city', 'filter-zip'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener(evt, render);
+    });
+  });
+
+  const resetBtn = document.getElementById('reset');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      document.getElementById('search').value = '';
+      document.getElementById('filter-category').value = '';
+      document.getElementById('filter-city').value = '';
+      document.getElementById('filter-zip').value = '';
+      render();
+    });
+  }
+}
+
+function setCategoryFilter(category) {
+  showPage('resources');
+  setTimeout(() => {
+    const sel = document.getElementById('filter-category');
+    if (sel) {
+      sel.value = category;
+      render();
+    }
+  }, 80);
+}
+
+function initMap() {
+  const container = document.getElementById('map');
+  if (!container) return;
+  MAP = L.map('map', { scrollWheelZoom: true }).setView([31.0, -99.0], 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(MAP);
+  CLUSTER = L.markerClusterGroup();
+  MAP.addLayer(CLUSTER);
+}
+
+// Navigation
+function showPage(pageId) {
+  const pages = ['page-home', 'page-resources', 'page-submit', 'page-about', 'page-refs'];
+  const navIds = ['nav-home', 'nav-resources', 'nav-submit', 'nav-about', 'nav-refs'];
+
+  pages.forEach(p => {
+    const el = document.getElementById(p);
+    if (el) el.classList.add('hidden');
+  });
+
+  navIds.forEach(n => {
+    const el = document.getElementById(n);
+    if (!el) return;
+    el.classList.remove('active', 'text-hub-teal-dark', 'border-b-2', 'border-hub-teal');
+    el.classList.add('text-gray-600');
+  });
+
+  const pageEl = document.getElementById('page-' + pageId);
+  if (pageEl) pageEl.classList.remove('hidden');
+
+  const activeNav = document.getElementById('nav-' + pageId);
+  if (activeNav) {
+    activeNav.classList.add('active', 'text-hub-teal-dark', 'border-b-2', 'border-hub-teal');
+    activeNav.classList.remove('text-gray-600');
+  }
+
+  if (pageId === 'resources' && MAP) {
+    setTimeout(() => MAP.invalidateSize(), 100);
+  }
+}
+
+function closeMenu() {
+  const menu = document.getElementById('nav-menu');
+  const toggle = document.getElementById('menu-toggle');
+  if (menu) menu.classList.add('hidden');
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', 'Open navigation menu');
+  }
+}
+
+document.getElementById('menu-toggle')?.addEventListener('click', function () {
+  const menu = document.getElementById('nav-menu');
+  const isOpen = menu && !menu.classList.contains('hidden');
+  if (menu) menu.classList.toggle('hidden');
+  this.setAttribute('aria-expanded', String(!isOpen));
+  this.setAttribute('aria-label', isOpen ? 'Open navigation menu' : 'Close navigation menu');
+});
+
+// Submit logic
+function handleSubmission(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const name = document.getElementById('sub-name').value.trim();
+  const city = document.getElementById('sub-city').value.trim();
+  const cat = document.getElementById('sub-cat').value;
+  const url = document.getElementById('sub-url').value.trim();
+  const desc = document.getElementById('sub-desc').value.trim();
+  const logo = document.getElementById('sub-logo').value.trim();
+
+  if (!name || !url) {
+    alert('Please enter at least the organization name and website/contact.');
+    return false;
+  }
+
+  const subject = encodeURIComponent('New Resource Suggestion: ' + name);
+  const body = encodeURIComponent(
+    'Organization Name: ' + name + '\n' +
+    'City: ' + city + '\n' +
+    'Category: ' + cat + '\n' +
+    'Website / Contact: ' + url + '\n' +
+    'Description: ' + (desc || '[Not provided]') + '\n' +
+    'Logo URL (optional): ' + (logo || '[Not provided]')
+  );
+
+  window.location.href = 'mailto:tsasubmission2143@gmail.com?subject=' + subject + '&body=' + body;
+
+  const msg = document.getElementById('submit-confirmation');
+  if (msg) msg.classList.remove('hidden');
+  return false;
+}
+
+// Filtering and rendering
+function getFiltered() {
+  const searchEl = document.getElementById('search');
+  if (!searchEl) return [];
+  const q = searchEl.value.trim().toLowerCase();
+  const cat = document.getElementById('filter-category').value;
+  const city = document.getElementById('filter-city').value;
+  const zip = document.getElementById('filter-zip').value;
+
+  return DATA.filter(d => {
+    if (cat && d.category !== cat) return false;
+    if (city && d.city !== city) return false;
+    if (zip && d.zip !== zip) return false;
+    if (q) {
+      const hay = (d.name + ' ' + d.category + ' ' + d.city + ' ' + d.zip + ' ' + d.desc).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function render() {
+  const countEl = document.getElementById('count');
+  const resultsEl = document.getElementById('results');
+  if (!countEl || !resultsEl) return;
+  const data = getFiltered();
+  renderList(data);
+  renderMap(data);
+  countEl.textContent = data.length;
+}
+
+function renderList(data) {
+  const el = document.getElementById('results');
+  if (!el) return;
+  if (!data.length) {
+    el.innerHTML = '<p class="py-10 text-center text-gray-500 text-sm italic">No resources match the current filters. Try changing the category, city, or search terms.</p>';
+    el.removeAttribute('role');
+    return;
+  }
+  el.setAttribute('role', 'list');
+  el.innerHTML = data.map(d => `
+    <article class="card-hover rounded-xl p-4 bg-white/90 border border-teal-50">
+      <div class="flex justify-between items-start gap-3">
+        <div class="min-w-0 flex-1">
+          <h3 class="font-semibold text-gray-900 text-sm truncate">${escapeHtml(d.name)}</h3>
+          <p class="text-[11px] text-gray-500 mt-0.5">${escapeHtml(d.city)} • ${escapeHtml(d.zip)}</p>
+          <p class="text-xs text-gray-600 mt-1 line-clamp-2">${escapeHtml(d.desc)}</p>
+        </div>
+        <span class="ml-2 inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-100">
+          ${escapeHtml(d.category)}
+        </span>
+      </div>
+      <a href="${d.url}" target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-hub-teal hover:text-hub-teal-dark">
+        Open resource
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </a>
+    </article>
+  `).join('');
+}
+
+function renderMap(data) {
+  if (!MAP || !CLUSTER) return;
+  CLUSTER.clearLayers();
+  data.forEach(d => {
+    const m = L.marker([d.lat, d.lng]);
+    m.bindPopup(
+      '<div class="p-1">' +
+      '<div class="font-bold text-xs mb-1">' + escapeHtml(d.name) + '</div>' +
+      '<div class="text-[11px] text-gray-600 mb-1">' + escapeHtml(d.city) + ' • ' + escapeHtml(d.category) + '</div>' +
+      '<a href="' + d.url + '" target="_blank" rel="noopener noreferrer" class="text-[11px] text-teal-700 font-semibold">Open site</a>' +
+      '</div>'
+    );
+    CLUSTER.addLayer(m);
+  });
+  if (data.length) {
+    MAP.fitBounds(L.featureGroup(CLUSTER.getLayers()).getBounds().pad(0.15));
+  }
+}
+
+function renderFeatured() {
+  const el = document.getElementById('featured-resources');
+  if (!el) return;
+  const featured = DATA.filter(d => d.featured);
+  if (!featured.length) {
+    el.innerHTML = '<p class="text-xs text-gray-500">Featured items will appear here.</p>';
+    return;
+  }
+  el.innerHTML = featured.slice(0, 6).map(d => `
+    <article class="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-3 card-hover">
+      <div class="flex justify-between items-start gap-2">
+        <div class="min-w-0">
+          <h3 class="font-semibold text-[13px] text-gray-900 truncate">${escapeHtml(d.name)}</h3>
+          <p class="text-[11px] text-gray-500 mt-0.5">${escapeHtml(d.city)} • ${escapeHtml(d.category)}</p>
+        </div>
+        <span class="inline-flex items-center rounded-full bg-white/60 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-100">Featured</span>
+      </div>
+      <a href="${d.url}" target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-hub-teal hover:text-hub-teal-dark">
+        View resource
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </a>
+    </article>
+  `).join('');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  init();
+  showPage('home');
+});
+</script>
+</body>
+</html>
